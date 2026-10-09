@@ -5212,9 +5212,15 @@ class NirSoftCFScanner:
                     "User-Agent": "CF-IP-Scanner/1.0",
                 },
             )
-            with urllib.request.urlopen(request, timeout=30) as response:
-                status = response.getcode()
-                body = response.read().decode("utf-8", errors="replace")
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    status = response.getcode()
+                    body = response.read().decode("utf-8", errors="replace")
+            except urllib.error.HTTPError as http_error:
+                # Worker 会在 400/401 等响应中返回具体原因；读取正文后显示，
+                # 避免只看到笼统的 “HTTP Error 400” 而不知道是否触及 KV 保护条件。
+                status = http_error.code
+                body = http_error.read().decode("utf-8", errors="replace")
             try:
                 result = json.loads(body or "{}")
             except Exception as exc:
