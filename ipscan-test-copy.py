@@ -4888,7 +4888,11 @@ class NirSoftCFScanner:
             return {"username": "", "password": ""}
 
     def get_cf_saved_password(self):
-        return self.get_cf_account_config().get("password", "")
+        """复用 CF 额度后台配置中的已保存密码，避免上传时读取另一份旧配置。"""
+        config = self.load_cf_quota_config()
+        if not config.get("remember", False):
+            return ""
+        return str(config.get("password", ""))
 
     def save_cf_account(self, username, password):
         base = os.path.dirname(os.path.abspath(__file__))
