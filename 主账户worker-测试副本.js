@@ -144,10 +144,10 @@ export default {
 						return port >= 1 && port <= 65535;
 						};
 						if (incoming.some(x => !validNode(x))) throw new Error('节点格式异常；未写入任何数据');
-						// 用 KV.get 原始值；若旧 key 不存在则拒绝自动初始化，避免把未知/生成订阅当作旧内容。
+						// 允许空测试账户首次初始化：KV 键不存在（null）或值为空时按空列表处理。
+						// KV.get 本身若发生异常会进入 catch 并停止；已有非空内容仍必须通过格式检查。
 						const oldValue = await env.KV.get('ADD.txt');
-						if (oldValue === null || oldValue === undefined) throw new Error('目标账户的 ADD.txt 原始 KV 不存在，已安全停止；未写入数据');
-						const oldLines = String(oldValue).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+						const oldLines = (oldValue == null ? '' : String(oldValue)).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
 						if (oldLines.some(x => !validNode(x))) throw new Error('旧 KV 中存在无法识别的内容，已停止以保护原数据');
 						const merged = oldLines.slice();
 						const known = new Set(oldLines);
