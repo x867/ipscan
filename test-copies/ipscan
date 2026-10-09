@@ -5177,10 +5177,14 @@ class NirSoftCFScanner:
         ):
             return
 
+        # 复用 CF 额度后台中已保存的管理密码，不在上传时再次弹出密码框。
+        # 若用户未勾选“保存登录信息”或本机没有保存密码，提示先在额度后台保存登录信息。
         password = self.get_cf_saved_password()
         if not password:
-            password = self.ask_cf_password()
-        if not password:
+            messagebox.showwarning(
+                "缺少已保存的登录信息",
+                "没有找到已保存的 CF 额度后台密码。请先打开“CF额度后台”，登录并勾选“保存登录信息”，再上传节点。"
+            )
             return
 
         self.lbl_progress.config(text=f"正在核对账户1旧 KV，准备增量上传 {len(nodes)} 个节点...")
