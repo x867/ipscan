@@ -129,6 +129,7 @@ export default {
 					}
 					if (访问路径 === 'admin/incremental-add.txt') {// 安全增量保存自定义优选IP；只操作当前账户自己的 KV
 						if (request.method !== 'POST') return new Response(JSON.stringify({ success: false, error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						let wrote = false;
 						try {
 							const incomingText = await request.text();
 							const incoming = incomingText.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
@@ -155,12 +156,12 @@ export default {
 							if (known.has(node)) { duplicates++; continue; }
 							known.add(node); merged.push(node); added++;
 						}
-						if (added > 0) await env.KV.put('ADD.txt', merged.join('\n'));
+						if (added > 0) { await env.KV.put('ADD.txt', merged.join('\n')); wrote = true; }
 						const verifyValue = await env.KV.get('ADD.txt');
 						if (verifyValue !== merged.join('\n')) throw new Error('写入后回读校验失败；请立即检查目标 KV');
 						return new Response(JSON.stringify({ success: true, old_count: oldLines.length, incoming_count: incoming.length, added, duplicates, final_count: merged.length, verified: true }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
 						} catch (error) {
-							return new Response(JSON.stringify({ success: false, error: error?.message || String(error), written: false }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+							return new Response(JSON.stringify({ success: false, error: error?.message || String(error), written: wrote ? 'possibly' : false }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
 						}
 					} else if (访问路径 === 'admin/get6workerinfo') {// 自动发现六账户 Worker 地址并读取候选域名
 						if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
