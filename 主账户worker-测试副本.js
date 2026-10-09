@@ -148,7 +148,12 @@ export default {
 						// KV.get 本身若发生异常会进入 catch 并停止；已有非空内容仍必须通过格式检查。
 						const oldValue = await env.KV.get('ADD.txt');
 						const oldLines = (oldValue == null ? '' : String(oldValue)).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
-						if (oldLines.some(x => !validNode(x))) throw new Error('旧 KV 中存在无法识别的内容，已停止以保护原数据');
+						const badIndex = oldLines.findIndex(x => !validNode(x));
+						if (badIndex !== -1) {
+							const badValue = oldLines[badIndex];
+							const sample = badValue.length > 80 ? badValue.slice(0, 77) + '...' : badValue;
+							throw new Error('旧 KV 第 ' + (badIndex + 1) + ' 行格式不符：' + JSON.stringify(sample) + '。未写入任何数据；请检查部署版本及该行实际内容');
+						}
 						const merged = oldLines.slice();
 						const known = new Set(oldLines);
 						let added = 0, duplicates = 0;
