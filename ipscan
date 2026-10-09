@@ -794,13 +794,6 @@ class NirSoftCFScanner:
         self.context_menu = tk.Menu(self.root, tearoff=0)
 
         self.context_menu.add_command(
-            label="🔄 重新测试此 IP (Xray 对齐)",
-            command=self.retest_selected_ip
-        )
-
-        self.context_menu.add_separator()
-
-        self.context_menu.add_command(
             label="复制选中 IP",
             command=self.copy_selected_ip
         )
