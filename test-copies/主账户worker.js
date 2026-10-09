@@ -131,12 +131,12 @@ export default {
 						if (request.method !== 'POST') return new Response(JSON.stringify({ success: false, error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
 						try {
 							const incomingText = await request.text();
-							const incoming = incomingText.split(/\\r?\\n/).map(x => x.trim()).filter(Boolean);
+							const incoming = incomingText.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
 							if (!incoming.length) throw new Error('没有收到可上传的节点');
 						const validNode = value => {
 							const line = String(value || '').trim();
-							const m6 = line.match(/^\\[([0-9a-fA-F:.]+)\\]:(\\d{1,5})$/);
-							const m4 = line.match(/^([0-9.]+):(\\d{1,5})$/);
+							const m6 = line.match(/^\[([0-9a-fA-F:.]+)\]:(\d{1,5})$/);
+							const m4 = line.match(/^([0-9.]+):(\d{1,5})$/);
 							const m = m6 || m4;
 							if (!m) return false;
 							const port = Number(m[m.length - 1]);
@@ -146,7 +146,7 @@ export default {
 						// 用 KV.get 原始值；若旧 key 不存在则拒绝自动初始化，避免把未知/生成订阅当作旧内容。
 						const oldValue = await env.KV.get('ADD.txt');
 						if (oldValue === null || oldValue === undefined) throw new Error('目标账户的 ADD.txt 原始 KV 不存在，已安全停止；未写入数据');
-						const oldLines = String(oldValue).split(/\\r?\\n/).map(x => x.trim()).filter(Boolean);
+						const oldLines = String(oldValue).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
 						if (oldLines.some(x => !validNode(x))) throw new Error('旧 KV 中存在无法识别的内容，已停止以保护原数据');
 						const merged = oldLines.slice();
 						const known = new Set(oldLines);
@@ -155,9 +155,9 @@ export default {
 							if (known.has(node)) { duplicates++; continue; }
 							known.add(node); merged.push(node); added++;
 						}
-						if (added > 0) await env.KV.put('ADD.txt', merged.join('\\n'));
+						if (added > 0) await env.KV.put('ADD.txt', merged.join('\n'));
 						const verifyValue = await env.KV.get('ADD.txt');
-						if (verifyValue !== merged.join('\\n')) throw new Error('写入后回读校验失败；请立即检查目标 KV');
+						if (verifyValue !== merged.join('\n')) throw new Error('写入后回读校验失败；请立即检查目标 KV');
 						return new Response(JSON.stringify({ success: true, old_count: oldLines.length, incoming_count: incoming.length, added, duplicates, final_count: merged.length, verified: true }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
 						} catch (error) {
 							return new Response(JSON.stringify({ success: false, error: error?.message || String(error), written: false }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
