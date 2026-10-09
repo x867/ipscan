@@ -809,6 +809,11 @@ class NirSoftCFScanner:
             command=self.copy_selected_ip_ports
         )
 
+        self.context_menu.add_command(
+            label="增量上传选中节点到账户1（测试）",
+            command=lambda: self.upload_selected_nodes_incremental(1)
+        )
+
         self.context_menu.add_separator()
 
         self.context_menu.add_command(
@@ -5127,6 +5132,112 @@ class NirSoftCFScanner:
                 if raw_port.isdigit() and 1 <= int(raw_port) <= 65535:
                     result.append(f"{ip}:{raw_port}")
         return result
+
+    def collect_selected_ip_ports_for_upload(self):
+        """收集当前选中的 IP 和端口；不依赖 Xray 测试状态。"""
+        result = []
+        seen = set()
+        for item_id in self.tree.selection():
+            values = self.tree.item(item_id).get("values", [])
+            if len(values) < 2:
+                continue
+            ip = str(values[0]).strip().strip("[]")
+            ports_text = str(values[1]).strip()
+            if not ip:
+                continue
+            for raw_port in ports_text.replace("，", ",").split(","):
+                raw_port = raw_port.strip()
+                if not raw_port.isdigit() or not (1 <= int(raw_port) <= 65535):
+                    continue
+                node = self._format_ip_port(ip, int(raw_port))
+                if node not in seen:
+                    seen.add(node)
+                    result.append(node)
+        return result
+
+    def upload_selected_nodes_incremental(self, account=1):
+        """测试版：仅把手动选中的节点增量追加到账户1。"""
+        if account != 1:
+            messagebox.showwarning("暂未开放", "当前测试版只开放账户1，验证通过后再扩展其他账户。")
+            return
+        if self.running:
+            messagebox.showinfo("提示", "扫描进行中，请先停止扫描再上传。")
+            return
+
+        nodes = self.collect_selected_ip_ports_for_upload()
+        if not nodes:
+            messagebox.showinfo("提示", "请先在 IP 列表中框选/多选要上传的节点。")
+            return
+
+        if not messagebox.askyesno(
+            "确认增量上传",
+            f"准备把选中的 {len(nodes)} 个 IP:端口增量上传到账户1（rrx.ccwu.cc）。\\n"
+            "Worker 会先读取该账户原始 KV、跳过重复节点并回读校验。\\n"
+            "如果旧 KV 不存在或内容无法识别，会停止写入。是否继续？"
+        ):
+            return
+
+        password = self.get_cf_saved_password()
+        if not password:
+            password = self.ask_cf_password()
+        if not password:
+            return
+
+        self.lbl_progress.config(text=f"正在核对账户1旧 KV，准备增量上传 {len(nodes)} 个节点...")
+        threading.Thread(
+            target=self._upload_selected_nodes_incremental_worker,
+            args=(nodes, password),
+            daemon=True
+        ).start()
+
+    def _upload_selected_nodes_incremental_worker(self, nodes, password):
+        try:
+            url = "https://rrx.ccwu.cc/admin/incremental-add.txt"
+            request = urllib.request.Request(
+                url,
+                data="\\n".join(nodes).encode("utf-8"),
+                method="POST",
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "text/plain; charset=utf-8",
+                    "X-Admin-Password": password,
+                    "User-Agent": "CF-IP-Scanner/1.0",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+                status = response.getcode()
+                body = response.read().decode("utf-8", errors="replace")
+            try:
+                result = json.loads(body or "{}")
+            except Exception as exc:
+                raise RuntimeError("Worker 返回的不是有效 JSON，未能确认上传结果。") from exc
+            if status != 200 or not result.get("success") or not result.get("verified"):
+                raise RuntimeError(str(result.get("error") or f"上传失败（HTTP {status}），未能确认写入结果。"))
+            summary = (
+                f"账户1增量上传完成并通过回读校验。\\n\\n"
+                f"上传前已有：{result.get('old_count', '?')} 条\\n"
+                f"本次选中：{result.get('incoming_count', len(nodes))} 条\\n"
+                f"新增：{result.get('added', '?')} 条\\n"
+                f"重复跳过：{result.get('duplicates', '?')} 条\\n"
+                f"最终 KV：{result.get('final_count', '?')} 条"
+            )
+            self.root.after(0, lambda msg=summary: self._incremental_upload_done(msg))
+        except Exception as exc:
+            error = str(exc)
+            self.root.after(0, lambda msg=error: self._incremental_upload_failed(msg))
+
+    def _incremental_upload_done(self, summary):
+        self.update_status()
+        self.lbl_progress.config(text="账户1增量上传完成")
+        messagebox.showinfo("增量上传结果", summary)
+
+    def _incremental_upload_failed(self, error):
+        self.update_status()
+        self.lbl_progress.config(text="账户1增量上传未确认")
+        messagebox.showerror(
+            "增量上传未确认",
+            f"{error}\\n\\n请先检查账户1 Worker 和 KV，不要立即重复上传。"
+        )
 
     def upload_to_cf(self):
         if self.running:
