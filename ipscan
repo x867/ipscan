@@ -5374,9 +5374,19 @@ class NirSoftCFScanner:
                 event.y_root
             )
 
+    def _format_ip_port(self, ip, port):
+        """IPv6 复制为 [地址]:端口；IPv4 保持 地址:端口。"""
+        ip = str(ip).strip().strip("[]")
+        try:
+            if ipaddress.ip_address(ip).version == 6:
+                return f"[{ip}]:{port}"
+        except ValueError:
+            pass
+        return f"{ip}:{port}"
+
     def _copy_one_ip_port(self, ip, port):
         self.root.clipboard_clear()
-        self.root.clipboard_append(f"{ip}:{port}")
+        self.root.clipboard_append(self._format_ip_port(ip, port))
 
     def copy_selected_ip_ports(self):
         """复制选中的 IP:端口，每个 IP 自动选择最高优先级的可用端口。"""
@@ -5430,7 +5440,7 @@ class NirSoftCFScanner:
                 )
             )[1]
 
-            nodes.append(f"{ip}:{best_port}")
+            nodes.append(self._format_ip_port(ip, best_port))
 
         if nodes:
             self.root.clipboard_clear()
@@ -5528,7 +5538,7 @@ class NirSoftCFScanner:
             for p in ports.split(","):
                 p = p.strip()
                 if p:
-                    ip_ports.append(f"{ip}:{p}")
+                    ip_ports.append(self._format_ip_port(ip, p))
         if ip_ports:
             self.root.clipboard_clear()
             self.root.clipboard_append("\n".join(ip_ports))
