@@ -127,7 +127,42 @@ export default {
 						}
 						return new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
 					}
-					if (访问路径 === 'admin/get6workerinfo') {// 自动发现六账户 Worker 地址并读取候选域名
+					if (访问路径 === 'admin/incremental-add.txt') {// 安全增量保存自定义优选IP；只操作当前账户自己的 KV
+						if (request.method !== 'POST') return new Response(JSON.stringify({ success: false, error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						try {
+							const incomingText = await request.text();
+							const incoming = incomingText.split(/\\r?\\n/).map(x => x.trim()).filter(Boolean);
+							if (!incoming.length) throw new Error('没有收到可上传的节点');
+						const validNode = value => {
+							const line = String(value || '').trim();
+							const m6 = line.match(/^\\[([0-9a-fA-F:.]+)\\]:(\\d{1,5})$/);
+							const m4 = line.match(/^([0-9.]+):(\\d{1,5})$/);
+							const m = m6 || m4;
+							if (!m) return false;
+							const port = Number(m[m.length - 1]);
+						return port >= 1 && port <= 65535;
+						};
+						if (incoming.some(x => !validNode(x))) throw new Error('节点格式异常；未写入任何数据');
+						// 用 KV.get 原始值；若旧 key 不存在则拒绝自动初始化，避免把未知/生成订阅当作旧内容。
+						const oldValue = await env.KV.get('ADD.txt');
+						if (oldValue === null || oldValue === undefined) throw new Error('目标账户的 ADD.txt 原始 KV 不存在，已安全停止；未写入数据');
+						const oldLines = String(oldValue).split(/\\r?\\n/).map(x => x.trim()).filter(Boolean);
+						if (oldLines.some(x => !validNode(x))) throw new Error('旧 KV 中存在无法识别的内容，已停止以保护原数据');
+						const merged = oldLines.slice();
+						const known = new Set(oldLines);
+						let added = 0, duplicates = 0;
+						for (const node of incoming) {
+							if (known.has(node)) { duplicates++; continue; }
+							known.add(node); merged.push(node); added++;
+						}
+						if (added > 0) await env.KV.put('ADD.txt', merged.join('\\n'));
+						const verifyValue = await env.KV.get('ADD.txt');
+						if (verifyValue !== merged.join('\\n')) throw new Error('写入后回读校验失败；请立即检查目标 KV');
+						return new Response(JSON.stringify({ success: true, old_count: oldLines.length, incoming_count: incoming.length, added, duplicates, final_count: merged.length, verified: true }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						} catch (error) {
+							return new Response(JSON.stringify({ success: false, error: error?.message || String(error), written: false }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						}
+					} else if (访问路径 === 'admin/get6workerinfo') {// 自动发现六账户 Worker 地址并读取候选域名
 						if (request.method !== 'GET') return new Response('Method Not Allowed', { status: 405 });
 						try {
 							const info = await get6AccountWorkerNodeInfo(env);
