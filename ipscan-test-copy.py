@@ -788,6 +788,15 @@ class NirSoftCFScanner:
             font=("Microsoft YaHei UI", 9)
         )
 
+        # 上传返回消息固定显示在状态栏右侧，10 秒后自动清除，不弹结果窗口。
+        self.lbl_upload_status = ttk.Label(
+            self.statusbar,
+            text="",
+            font=("Microsoft YaHei UI", 9)
+        )
+        self.lbl_upload_status.pack(side="right", padx=(8, 4))
+        self._upload_status_after_id = None
+
         # ====================================================
         # 右键菜单
         # ====================================================
@@ -5299,17 +5308,39 @@ class NirSoftCFScanner:
             error = str(exc)
             self.root.after(0, lambda msg=error: self._incremental_upload_failed(msg))
 
+    def _show_upload_status_message(self, message, is_error=False):
+        """在状态栏右侧显示上传返回消息 10 秒，不弹出消息框。"""
+        try:
+            if self._upload_status_after_id is not None:
+                self.root.after_cancel(self._upload_status_after_id)
+        except Exception:
+            pass
+        text = re.sub(r"\s+", "；", str(message)).strip()
+        # 状态栏空间有限，保留关键返回信息，避免挤压其他状态。
+        if len(text) > 180:
+            text = text[:177] + "..."
+        self.lbl_upload_status.config(
+            text=text,
+            foreground=("#b00020" if is_error else "#087f23")
+        )
+        try:
+            self._upload_status_after_id = self.root.after(
+                10000, lambda: self.lbl_upload_status.config(text="")
+            )
+        except Exception:
+            self._upload_status_after_id = None
+
     def _incremental_upload_done(self, summary):
         self.update_status()
-        self.lbl_progress.config(text="账户1增量上传完成")
-        messagebox.showinfo("增量上传结果", summary)
+        self.lbl_progress.config(text="增量上传已完成")
+        self._show_upload_status_message(summary, is_error=False)
 
     def _incremental_upload_failed(self, error):
         self.update_status()
-        self.lbl_progress.config(text="账户1增量上传未确认")
-        messagebox.showerror(
-            "增量上传未确认",
-            f"{error}\n\n请先检查账户1 Worker 和 KV，不要立即重复上传。"
+        self.lbl_progress.config(text="增量上传未确认")
+        self._show_upload_status_message(
+            f"上传未确认：{error}；请检查 Worker/KV 后再决定是否重试",
+            is_error=True
         )
 
     def upload_to_cf(self):
