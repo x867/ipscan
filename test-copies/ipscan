@@ -809,10 +809,16 @@ class NirSoftCFScanner:
             command=self.copy_selected_ip_ports
         )
 
-        self.context_menu.add_command(
-            label="增量上传选中节点到账户1（测试）",
-            command=lambda: self.upload_selected_nodes_incremental(1)
-        )
+        upload_menu = tk.Menu(self.context_menu, tearoff=0)
+        for account_no, account_host in enumerate(
+            ["rrx.ccwu.cc", "rro.ccwu.cc", "rrs.ccwu.cc",
+             "rri.ccwu.cc", "rrz.ccwu.cc", "rre.ccwu.cc"], start=1
+        ):
+            upload_menu.add_command(
+                label=f"账户{account_no}（{account_host}）",
+                command=lambda n=account_no: self.upload_selected_nodes_incremental(n)
+            )
+        self.context_menu.add_cascade(label="增量上传选中节点到…", menu=upload_menu)
 
         self.context_menu.add_separator()
 
@@ -5172,9 +5178,18 @@ class NirSoftCFScanner:
         return result
 
     def upload_selected_nodes_incremental(self, account=1):
-        """测试版：仅把手动选中的节点增量追加到账户1。"""
-        if account != 1:
-            messagebox.showwarning("暂未开放", "当前测试版只开放账户1，验证通过后再扩展其他账户。")
+        """把手动选中的节点增量追加到指定账户；各账户 Worker 需先部署对应接口。"""
+        account_hosts = {
+            1: "rrx.ccwu.cc",
+            2: "rro.ccwu.cc",
+            3: "rrs.ccwu.cc",
+            4: "rri.ccwu.cc",
+            5: "rrz.ccwu.cc",
+            6: "rre.ccwu.cc",
+        }
+        host = account_hosts.get(int(account))
+        if not host:
+            messagebox.showwarning("账户错误", "目标账户编号无效。")
             return
         if self.running:
             messagebox.showinfo("提示", "扫描进行中，请先停止扫描再上传。")
@@ -5209,16 +5224,16 @@ class NirSoftCFScanner:
             )
             return
 
-        self.lbl_progress.config(text=f"选中 {selected_rows} 行 / {len(nodes)} 个 IP:端口；正在连接账户1 Worker...")
+        self.lbl_progress.config(text=f"目标账户{account}（{host}）：选中 {selected_rows} 行 / {len(nodes)} 个 IP:端口；正在连接 Worker...")
         threading.Thread(
             target=self._upload_selected_nodes_incremental_worker,
-            args=(nodes, password),
+            args=(nodes, password, account, host),
             daemon=True
         ).start()
 
-    def _upload_selected_nodes_incremental_worker(self, nodes, password):
+    def _upload_selected_nodes_incremental_worker(self, nodes, password, account=1, host="rrx.ccwu.cc"):
         try:
-            url = "https://rrx.ccwu.cc/admin/incremental-add.txt"
+            url = f"https://{host}/admin/incremental-add.txt"
             request = urllib.request.Request(
                 url,
                 data="\n".join(nodes).encode("utf-8"),
@@ -5249,7 +5264,7 @@ class NirSoftCFScanner:
                     detail += "\\n\\nHTTP 522 通常表示 Cloudflare 到目标服务的连接超时，或目标 Worker/域名当前不可达。此时不能判断 KV 是否被改动；请先检查账户1 Worker 是否已部署最新测试副本、rrx.ccwu.cc 是否可正常打开，再检查 KV。不要连续重复上传。"
                 raise RuntimeError(detail)
             summary = (
-                f"账户1增量上传完成并通过回读校验。\n\n"
+                f"账户{account}增量上传完成并通过回读校验。\n\n"
                 f"上传前已有：{result.get('old_count', '?')} 条\n"
                 f"本次选中：{result.get('incoming_count', len(nodes))} 条\n"
                 f"新增：{result.get('added', '?')} 条\n"
