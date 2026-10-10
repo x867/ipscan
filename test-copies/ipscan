@@ -809,16 +809,8 @@ class NirSoftCFScanner:
             command=self.copy_selected_ip_ports
         )
 
-        upload_menu = tk.Menu(self.context_menu, tearoff=0)
-        for account_no, account_host in enumerate(
-            ["rrx.ccwu.cc", "rro.ccwu.cc", "rrs.ccwu.cc",
-             "rri.ccwu.cc", "rrz.ccwu.cc", "rre.ccwu.cc"], start=1
-        ):
-            upload_menu.add_command(
-                label=f"账户{account_no}（{account_host}）",
-                command=lambda n=account_no: self.upload_selected_nodes_incremental(n)
-            )
-        self.context_menu.add_cascade(label="增量上传选中节点到…", menu=upload_menu)
+        self.upload_menu = tk.Menu(self.context_menu, tearoff=0)
+        self.context_menu.add_cascade(label="增量上传选中节点到…", menu=self.upload_menu)
 
         self.context_menu.add_separator()
 
@@ -5179,17 +5171,18 @@ class NirSoftCFScanner:
 
     def upload_selected_nodes_incremental(self, account=1):
         """把手动选中的节点增量追加到指定账户；各账户 Worker 需先部署对应接口。"""
-        account_hosts = {
-            1: "rrx.ccwu.cc",
-            2: "rro.ccwu.cc",
-            3: "rrs.ccwu.cc",
-            4: "rri.ccwu.cc",
-            5: "rrz.ccwu.cc",
-            6: "rre.ccwu.cc",
-        }
-        host = account_hosts.get(int(account))
+        # 目标地址取自最近一次自动获取成功的账户配置，不在代码里固定域名或账户数量。
+        try:
+            cfg = (getattr(self, "node_configs", []) or [])[int(account) - 1]
+            snis = cfg.get("snis") if isinstance(cfg, dict) else []
+            if not snis and isinstance(cfg, dict) and cfg.get("sni"):
+                snis = [cfg.get("sni")]
+            host = str((snis or [""])[0]).strip()
+            host = re.sub(r"^https?://", "", host, flags=re.I).split("/", 1)[0].strip()
+        except Exception:
+            host = ""
         if not host:
-            messagebox.showwarning("账户错误", "目标账户编号无效。")
+            messagebox.showwarning("账户错误", "该账户尚未成功获取有效 Worker 地址，请先执行自动获取。")
             return
         if self.running:
             messagebox.showinfo("提示", "扫描进行中，请先停止扫描再上传。")
@@ -5522,6 +5515,29 @@ class NirSoftCFScanner:
         self._ip_drag_start_autoscroll()
 
     def show_context_menu(self, event):
+        # 菜单账户只根据自动获取后保存的有效账户配置生成，不写死账户数或域名。
+        try:
+            self.upload_menu.delete(0, "end")
+            accounts = []
+            for index, cfg in enumerate(getattr(self, "node_configs", []) or [], start=1):
+                snis = cfg.get("snis") if isinstance(cfg, dict) else []
+                if not snis and isinstance(cfg, dict) and cfg.get("sni"):
+                    snis = [cfg.get("sni")]
+                host = str((snis or [""])[0]).strip()
+                host = re.sub(r"^https?://", "", host, flags=re.I).split("/", 1)[0].strip()
+                if host:
+                    accounts.append((index, host))
+            if accounts:
+                for account_no, account_host in accounts:
+                    self.upload_menu.add_command(
+                        label=f"账户{account_no}（{account_host}）",
+                        command=lambda n=account_no: self.upload_selected_nodes_incremental(n)
+                    )
+            else:
+                self.upload_menu.add_command(label="尚未获取到有效账户", state="disabled")
+        except Exception:
+            pass
+
         item = self.tree.identify_row(event.y)
 
         if item:
