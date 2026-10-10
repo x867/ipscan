@@ -807,21 +807,11 @@ class NirSoftCFScanner:
             command=self.copy_selected_ip
         )
 
-        self.context_menu.add_command(
-            label="复制测试下载后的 IP",
-            command=self.copy_tested_speed_ips
-        )
-
         # 动态端口子菜单：右键当前 IP 后，只显示该 IP 的可用端口。
         self.context_menu.add_command(
             label="复制选中 IP:端口",
             command=self.copy_selected_ip_ports
         )
-
-        self.upload_menu = tk.Menu(self.context_menu, tearoff=0)
-        self.context_menu.add_cascade(label="上传到账户", menu=self.upload_menu)
-
-        self.context_menu.add_separator()
 
         self.context_menu.add_command(
             label="复制所有可用 IP",
@@ -832,6 +822,10 @@ class NirSoftCFScanner:
             label="复制所有可用 IP:端口",
             command=self.copy_all_valid_ip_ports
         )
+
+        # 上传菜单放在右键菜单最后，账户列表按实际获取结果动态生成。
+        self.upload_menu = tk.Menu(self.context_menu, tearoff=0)
+        self.context_menu.add_cascade(label="上传到CF账户", menu=self.upload_menu)
 
     def fast_scroll(self, event):
         self.tree.yview_scroll(int(-event.delta / 24), "units")
