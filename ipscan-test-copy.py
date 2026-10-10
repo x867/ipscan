@@ -5270,7 +5270,17 @@ class NirSoftCFScanner:
             try:
                 result = json.loads(body or "{}")
             except Exception as exc:
-                raise RuntimeError("Worker 返回的不是有效 JSON，未能确认上传结果。") from exc
+                # 非 JSON 响应通常是 404/登录页/Cloudflare 错误页；显示状态码和正文片段以便定位。
+                detail = re.sub(r"\\s+", " ", body or "").strip()[:260]
+                if not detail:
+                    detail = "响应正文为空"
+                raise RuntimeError(
+                    f"账户{account}上传接口返回的不是 JSON（HTTP {status}）。"
+                    f"目标：{host}/admin/incremental-add.txt\\n"
+                    f"响应内容：{detail}\\n"
+                    "请确认该账户 Worker 已部署 admin/incremental-add.txt 增量接口；"
+                    "在确认 KV 内容前不要重复上传。"
+                ) from exc
             if status != 200 or not result.get("success") or not result.get("verified"):
                 detail = str(result.get("error") or f"上传失败（HTTP {status}），未能确认写入结果。")
                 if status == 522:
