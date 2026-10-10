@@ -315,9 +315,17 @@ class NirSoftCFScanner:
                         ordered = sorted(valid)
                         valid = ordered[1:-1]
                     avg = round(sum(valid) / len(valid))
-                    card["value"].config(text=f"{avg} ms", foreground="#222222")
+                    if avg < 50:
+                        color = "#90EE90"       # 0–49：浅绿色
+                    elif avg < 150:
+                        color = "#006400"       # 50–149：深绿色
+                    elif avg < 300:
+                        color = "#E6A700"       # 150–299：橙黄色
+                    else:
+                        color = "#D93025"       # 300 及以上：红色
+                    card["value"].config(text=f"{avg} ms", foreground=color)
                 else:
-                    card["value"].config(text="失败", foreground="#d93025")
+                    card["value"].config(text="失败", foreground="#D93025")
                 self._draw_speed_graph(name, samples)
         except queue.Empty:
             pass
@@ -651,10 +659,10 @@ class NirSoftCFScanner:
         ).pack(side="left", padx=(10, 0))
 
         speed_grid = tk.Frame(self.speed_overlay, bg="#f4f4f4")
-        speed_grid.pack(fill="both", expand=True, padx=18, pady=(0, 12))
+        speed_grid.pack(fill="both", expand=True, padx=12, pady=(0, 10))
         for col in range(2):
-            speed_grid.grid_columnconfigure(col, weight=1)
-        for row in range(4):
+            speed_grid.grid_columnconfigure(col, weight=1, uniform="speed_columns")
+        for row in range(5):
             speed_grid.grid_rowconfigure(row, weight=1)
 
         self.speed_test_sites = [
@@ -667,21 +675,41 @@ class NirSoftCFScanner:
             ("X.com", "国际", "https://abs.twimg.com/favicons/twitter.3.ico"),
             ("YouTube", "国际", "https://www.youtube.com/favicon.ico"),
         ]
-        for index, (name, region, url) in enumerate(self.speed_test_sites):
-            card = tk.Frame(speed_grid, bg="#ffffff", bd=1, relief="solid")
-            card.grid(row=index // 2, column=index % 2, sticky="nsew", padx=5, pady=5)
-            header = tk.Frame(card, bg="#ffffff")
-            header.pack(fill="x", padx=10, pady=(8, 2))
-            left = tk.Frame(header, bg="#ffffff")
-            left.pack(side="left", fill="x", expand=True)
-            tk.Label(left, text=name, bg="#ffffff", font=("Microsoft YaHei UI", 10, "bold")).pack(side="left")
-            tk.Label(left, text=region, bg="#ffffff", fg="#777777", font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(7, 0))
-            value = tk.Label(header, text="... ms", bg="#ffffff", font=("Microsoft YaHei UI", 13, "bold"))
-            value.pack(side="right")
-            graph = tk.Canvas(card, height=52, bg="#ffffff", highlightthickness=0)
-            graph.pack(fill="x", padx=10, pady=(0, 8))
-            self.speed_test_cards[name] = {"value": value, "graph": graph, "url": url, "region": region}
-            self.speed_test_samples[name] = []
+
+        # 两列分区：左侧全部国内站点，右侧全部国际站点。
+        region_columns = [
+            ("国内站点", [site for site in self.speed_test_sites if site[1] == "国内"]),
+            ("国际站点", [site for site in self.speed_test_sites if site[1] == "国际"]),
+        ]
+        for col, (region_title, sites) in enumerate(region_columns):
+            region_frame = tk.Frame(speed_grid, bg="#f4f4f4")
+            region_frame.grid(row=0, column=col, rowspan=5, sticky="nsew", padx=4)
+            region_frame.grid_columnconfigure(0, weight=1)
+            tk.Label(
+                region_frame, text=region_title, bg="#f4f4f4", fg="#444444",
+                font=("Microsoft YaHei UI", 10, "bold"), anchor="w"
+            ).grid(row=0, column=0, sticky="ew", padx=2, pady=(0, 4))
+            for row, (name, region, url) in enumerate(sites, start=1):
+                region_frame.grid_rowconfigure(row, weight=1)
+                card = tk.Frame(region_frame, bg="#ffffff", bd=1, relief="solid")
+                card.grid(row=row, column=0, sticky="nsew", padx=2, pady=3)
+                header = tk.Frame(card, bg="#ffffff")
+                header.pack(fill="x", padx=8, pady=(6, 1))
+                tk.Label(
+                    header, text=name, bg="#ffffff",
+                    font=("Microsoft YaHei UI", 10, "bold")
+                ).pack(side="left")
+                value = tk.Label(
+                    header, text="... ms", bg="#ffffff", fg="#777777",
+                    font=("Microsoft YaHei UI", 13, "bold")
+                )
+                value.pack(side="right")
+                graph = tk.Canvas(card, height=34, bg="#ffffff", highlightthickness=0)
+                graph.pack(fill="x", padx=8, pady=(0, 5))
+                self.speed_test_cards[name] = {
+                    "value": value, "graph": graph, "url": url, "region": region
+                }
+                self.speed_test_samples[name] = []
 
         self.speed_overlay.lift()
 
