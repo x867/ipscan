@@ -1388,6 +1388,22 @@ class NirSoftCFScanner:
         while len(self.node_configs) < 6:
             self.node_configs.append({"account": len(self.node_configs)+1, "uuid": "", "snis": [], "sni": ""})
         self.node_configs = self.node_configs[:6]
+        # 初始化动态上传账户缓存：优先使用已保存的有效 SNI；自动发现完成后会刷新。
+        self.incremental_upload_accounts = {}
+        for item in self.node_configs:
+            if not isinstance(item, dict):
+                continue
+            try:
+                account_no = int(item.get("account") or 0)
+            except Exception:
+                continue
+            values = item.get("snis") if isinstance(item.get("snis"), list) else []
+            if not values and item.get("sni"):
+                values = [item.get("sni")]
+            host = str((values or [""])[0]).strip()
+            host = re.sub(r"^https?://", "", host, flags=re.I).split("/", 1)[0].strip()
+            if account_no > 0 and host:
+                self.incremental_upload_accounts[account_no] = host
         self.config_index = 0
         self._account_sni_pos = [0] * len(self.node_configs)
 
