@@ -5309,26 +5309,59 @@ class NirSoftCFScanner:
             self.root.after(0, lambda msg=error: self._incremental_upload_failed(msg))
 
     def _show_upload_status_message(self, message, is_error=False):
-        """在状态栏右侧显示上传返回消息 10 秒，不弹出消息框。"""
+        """状态栏右侧显示上传结果 10 秒；错误消息红黑交替闪烁，成功为黑字。"""
         try:
             if self._upload_status_after_id is not None:
                 self.root.after_cancel(self._upload_status_after_id)
         except Exception:
             pass
+        try:
+            if getattr(self, "_upload_status_blink_after_id", None) is not None:
+                self.root.after_cancel(self._upload_status_blink_after_id)
+        except Exception:
+            pass
+
         text = re.sub(r"\s+", "；", str(message)).strip()
         # 状态栏空间有限，保留关键返回信息，避免挤压其他状态。
         if len(text) > 180:
             text = text[:177] + "..."
+        self._upload_status_started_at = time.monotonic()
+        self._upload_status_is_error = bool(is_error)
         self.lbl_upload_status.config(
             text=text,
-            foreground=("#b00020" if is_error else "#087f23")
+            foreground=("#c00000" if is_error else "#000000")
         )
-        try:
-            self._upload_status_after_id = self.root.after(
-                10000, lambda: self.lbl_upload_status.config(text="")
-            )
-        except Exception:
+
+        if is_error:
+            self._upload_status_blink_state = False
+
+            def _blink_upload_status():
+                if time.monotonic() - self._upload_status_started_at >= 10:
+                    return
+                self._upload_status_blink_state = not self._upload_status_blink_state
+                try:
+                    self.lbl_upload_status.config(
+                        foreground=("#c00000" if self._upload_status_blink_state else "#000000")
+                    )
+                    self._upload_status_blink_after_id = self.root.after(
+                        500, _blink_upload_status
+                    )
+                except Exception:
+                    self._upload_status_blink_after_id = None
+
+            self._upload_status_blink_after_id = self.root.after(500, _blink_upload_status)
+
+        def _clear_upload_status():
+            try:
+                if getattr(self, "_upload_status_blink_after_id", None) is not None:
+                    self.root.after_cancel(self._upload_status_blink_after_id)
+            except Exception:
+                pass
+            self._upload_status_blink_after_id = None
+            self.lbl_upload_status.config(text="", foreground="#000000")
             self._upload_status_after_id = None
+
+        self._upload_status_after_id = self.root.after(10000, _clear_upload_status)
 
     def _incremental_upload_done(self, summary):
         self.update_status()
