@@ -5209,7 +5209,7 @@ class NirSoftCFScanner:
             f"当前选中表格行：{selected_rows} 行\n"
             f"拆分后的 IP:端口节点：{len(nodes)} 个\n\n"
             f"待上传预览：\n{preview}\n\n"
-            f"目标账户：账户{account}（{host}）\\n"
+            f"目标账户：账户{account}（{host}）\n"
             "Worker 会读取旧 KV、跳过重复节点并回读校验。是否继续？"
         ):
             return
