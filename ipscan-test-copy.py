@@ -5223,18 +5223,7 @@ class NirSoftCFScanner:
             return
 
         selected_rows = len(self.tree.selection())
-        preview = "\n".join(nodes[:12])
-        if len(nodes) > 12:
-            preview += f"\n……另有 {len(nodes) - 12} 个节点"
-        if not messagebox.askyesno(
-            "确认增量上传",
-            f"当前选中表格行：{selected_rows} 行\n"
-            f"拆分后的 IP:端口节点：{len(nodes)} 个\n\n"
-            f"待上传预览：\n{preview}\n\n"
-            f"目标账户：账户{account}（{host}）\n"
-            "Worker 会读取旧 KV、跳过重复节点并回读校验。是否继续？"
-        ):
-            return
+        # 用户已在右键菜单选择账户并选中节点，直接开始增量上传，不再弹确认窗口。
 
         # 复用 CF 额度后台中已保存的管理密码，不在上传时再次弹出密码框。
         # 若用户未勾选“保存登录信息”或本机没有保存密码，提示先在额度后台保存登录信息。
