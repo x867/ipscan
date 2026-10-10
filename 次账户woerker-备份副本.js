@@ -161,7 +161,7 @@ export default {
 						} catch (error) {
 							return new Response(JSON.stringify({ success: false, error: error?.message || String(error), written: wrote ? 'possibly' : false }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
 						}
-					else if (访问路径 === 'admin/log.json') {// 读取日志内容
+					} else if (访问路径 === 'admin/log.json') {// 读取日志内容
 						const 读取日志内容 = await env.KV.get('log.json') || '[]';
 						return new Response(读取日志内容, { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 					} else if (区分大小写访问路径 === 'admin/getCloudflareUsage') {// 查询请求量
