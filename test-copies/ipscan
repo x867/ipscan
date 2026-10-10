@@ -1686,8 +1686,9 @@ class NirSoftCFScanner:
                     raise RuntimeError(str(data.get("error") or data.get("msg") or "六账户 Worker 自动发现失败"))
 
                 discovered = data.get("accounts") or []
-                if len(discovered) != 6:
-                    raise RuntimeError("Worker 返回的六账户发现结果不完整")
+                if not isinstance(discovered, list) or not discovered:
+                    raise RuntimeError("Worker 没有返回有效账户列表")
+                # 允许后台返回 1~6 个账户；菜单只展示实际成功获取的账户。
 
                 # 只认账户1的 UUID。账户2~6即使返回 uuid 也完全忽略。
                 account1 = next((item for item in discovered if int(item.get("account") or 0) == 1), None)
@@ -1716,7 +1717,7 @@ class NirSoftCFScanner:
                 if not shared_uuid:
                     raise RuntimeError("账户1没有获取到 UUID，请检查账户1权限或 Worker 配置。")
 
-                # 六个子账户只取自己的 SNI/域名，统一使用账户1 UUID。
+                # 子账户只取自己的 SNI/域名，统一使用账户1 UUID。
                 for item in discovered:
                     account = int(item.get("account") or 0)
                     if not 1 <= account <= 6:
@@ -1785,6 +1786,13 @@ class NirSoftCFScanner:
 
             def apply():
                 try:
+                    # 上传菜单只记录本次自动发现中真正成功取得有效地址的账户。
+                    # 不从固定长度的 node_configs 推导，避免空白占位账户误显示。
+                    self.incremental_upload_accounts = {
+                        i + 1: str((info.get("snis") or [""])[0]).strip()
+                        for i, info, error in results
+                        if info and info.get("snis") and str((info.get("snis") or [""])[0]).strip()
+                    }
                     # 公共 UUID 永远只来自账户1。
                     for i, info, error in results:
                         if info is not None:
@@ -5171,13 +5179,9 @@ class NirSoftCFScanner:
 
     def upload_selected_nodes_incremental(self, account=1):
         """把手动选中的节点增量追加到指定账户；各账户 Worker 需先部署对应接口。"""
-        # 目标地址取自最近一次自动获取成功的账户配置，不在代码里固定域名或账户数量。
+        # 目标地址取自最近一次自动发现成功的账户缓存，不在代码里固定域名。
         try:
-            cfg = (getattr(self, "node_configs", []) or [])[int(account) - 1]
-            snis = cfg.get("snis") if isinstance(cfg, dict) else []
-            if not snis and isinstance(cfg, dict) and cfg.get("sni"):
-                snis = [cfg.get("sni")]
-            host = str((snis or [""])[0]).strip()
+            host = str((getattr(self, "incremental_upload_accounts", {}) or {}).get(int(account), "")).strip()
             host = re.sub(r"^https?://", "", host, flags=re.I).split("/", 1)[0].strip()
         except Exception:
             host = ""
@@ -5518,15 +5522,11 @@ class NirSoftCFScanner:
         # 菜单账户只根据自动获取后保存的有效账户配置生成，不写死账户数或域名。
         try:
             self.upload_menu.delete(0, "end")
-            accounts = []
-            for index, cfg in enumerate(getattr(self, "node_configs", []) or [], start=1):
-                snis = cfg.get("snis") if isinstance(cfg, dict) else []
-                if not snis and isinstance(cfg, dict) and cfg.get("sni"):
-                    snis = [cfg.get("sni")]
-                host = str((snis or [""])[0]).strip()
-                host = re.sub(r"^https?://", "", host, flags=re.I).split("/", 1)[0].strip()
-                if host:
-                    accounts.append((index, host))
+            accounts = sorted(
+                (int(number), str(host).strip())
+                for number, host in (getattr(self, "incremental_upload_accounts", {}) or {}).items()
+                if str(host).strip()
+            )
             if accounts:
                 for account_no, account_host in accounts:
                     self.upload_menu.add_command(
