@@ -134,8 +134,10 @@ export default {
 							const incomingText = await request.text();
 							const incoming = incomingText.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
 							if (!incoming.length) throw new Error('没有收到可上传的节点');
+						// ADD.txt 允许在节点后使用 #备注；校验和去重只看 # 前面的 IP:端口。
+						const nodeAddress = value => String(value || '').trim().split('#', 1)[0].trim();
 						const validNode = value => {
-							const line = String(value || '').trim();
+							const line = nodeAddress(value);
 							const m6 = line.match(/^\[([0-9a-fA-F:.]+)\]:(\d{1,5})$/);
 							const m4 = line.match(/^([0-9.]+):(\d{1,5})$/);
 							const m = m6 || m4;
@@ -155,11 +157,12 @@ export default {
 							throw new Error('旧 KV 第 ' + (badIndex + 1) + ' 行格式不符：' + JSON.stringify(sample) + '。未写入任何数据；请检查部署版本及该行实际内容');
 						}
 						const merged = oldLines.slice();
-						const known = new Set(oldLines);
+						const known = new Set(oldLines.map(nodeAddress));
 						let added = 0, duplicates = 0;
 						for (const node of incoming) {
-							if (known.has(node)) { duplicates++; continue; }
-							known.add(node); merged.push(node); added++;
+							const key = nodeAddress(node);
+							if (known.has(key)) { duplicates++; continue; }
+							known.add(key); merged.push(node); added++;
 						}
 						if (added > 0) { await env.KV.put('ADD.txt', merged.join('\n')); wrote = true; }
 						const verifyValue = await env.KV.get('ADD.txt');
