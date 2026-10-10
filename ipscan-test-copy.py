@@ -179,6 +179,7 @@ class NirSoftCFScanner:
             except Exception:
                 pass
         self.speed_overlay.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+        self.speed_panel_button.config(text="返回", command=self.close_speed_test_panel)
         self.speed_overlay.lift()
         self.tree_scrollbar.lift()
         if not self.speed_test_running:
@@ -193,6 +194,7 @@ class NirSoftCFScanner:
 
     def close_speed_test_panel(self):
         self.speed_overlay.place_forget()
+        self.speed_panel_button.config(text="测速面板", command=self.open_speed_test_panel)
 
     def _speed_test_once(self, url, conn=None):
         """复刻后台 testLatency：HEAD + 时间戳 + 8秒超时，并保持连接。"""
@@ -647,10 +649,6 @@ class NirSoftCFScanner:
             speed_title_bar, text="直连真实站点 · 不经过 Xray", bg="#f4f4f4", fg="#777777",
             font=("Microsoft YaHei UI", 9)
         ).pack(side="left", padx=(10, 0))
-        ttk.Button(
-            speed_title_bar, text="返回", width=8,
-            command=self.close_speed_test_panel
-        ).pack(side="right")
 
         speed_grid = tk.Frame(self.speed_overlay, bg="#f4f4f4")
         speed_grid.pack(fill="both", expand=True, padx=18, pady=(0, 12))
