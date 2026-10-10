@@ -5174,15 +5174,15 @@ class NirSoftCFScanner:
             return
 
         selected_rows = len(self.tree.selection())
-        preview = "\\n".join(nodes[:12])
+        preview = "\n".join(nodes[:12])
         if len(nodes) > 12:
-            preview += f"\\n……另有 {len(nodes) - 12} 个节点"
+            preview += f"\n……另有 {len(nodes) - 12} 个节点"
         if not messagebox.askyesno(
             "确认增量上传",
-            f"当前选中表格行：{selected_rows} 行\\n"
-            f"拆分后的 IP:端口节点：{len(nodes)} 个\\n\\n"
-            f"待上传预览：\\n{preview}\\n\\n"
-            "目标账户：账户1（rrx.ccwu.cc）\\n"
+            f"当前选中表格行：{selected_rows} 行\n"
+            f"拆分后的 IP:端口节点：{len(nodes)} 个\n\n"
+            f"待上传预览：\n{preview}\n\n"
+            "目标账户：账户1（rrx.ccwu.cc）\n"
             "Worker 会读取旧 KV、跳过重复节点并回读校验。是否继续？"
         ):
             return
@@ -5234,7 +5234,7 @@ class NirSoftCFScanner:
             if status != 200 or not result.get("success") or not result.get("verified"):
                 detail = str(result.get("error") or f"上传失败（HTTP {status}），未能确认写入结果。")
                 if status == 522:
-                    detail += "\\n\\nHTTP 522 通常表示 Cloudflare 到目标服务的连接超时，或目标 Worker/域名当前不可达。此时不能判断 KV 是否被改动；请先检查账户1 Worker 是否已部署最新测试副本、rrx.ccwu.cc 是否可正常打开，再检查 KV。不要连续重复上传。"
+                    detail += "\n\nHTTP 522 通常表示 Cloudflare 到目标服务的连接超时，或目标 Worker/域名当前不可达。此时不能判断 KV 是否被改动；请先检查账户1 Worker 是否已部署最新测试副本、rrx.ccwu.cc 是否可正常打开，再检查 KV。不要连续重复上传。"
                 raise RuntimeError(detail)
             summary = (
                 f"账户1增量上传完成并通过回读校验。\n\n"
