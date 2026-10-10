@@ -5138,7 +5138,9 @@ class NirSoftCFScanner:
         return result
 
     def collect_selected_ip_ports_for_upload(self):
-        """收集当前选中的 IP 和端口；不依赖 Xray 测试状态。"""
+        """每个选中的 IP 只取一个优先级最高的可用端口；不依赖 Xray 测试状态。"""
+        port_priority = ["443", "2053", "2083", "2087", "2096", "8443"]
+        priority_map = {port: index for index, port in enumerate(port_priority)}
         result = []
         seen = set()
         for item_id in self.tree.selection():
@@ -5146,17 +5148,27 @@ class NirSoftCFScanner:
             if len(values) < 2:
                 continue
             ip = str(values[0]).strip().strip("[]")
-            ports_text = str(values[1]).strip()
             if not ip:
                 continue
-            for raw_port in ports_text.replace("，", ",").split(","):
-                raw_port = raw_port.strip()
-                if not raw_port.isdigit() or not (1 <= int(raw_port) <= 65535):
-                    continue
-                node = self._format_ip_port(ip, int(raw_port))
-                if node not in seen:
-                    seen.add(node)
-                    result.append(node)
+            row_ports = []
+            for raw_port in str(values[1]).replace("，", ",").split(","):
+                port = raw_port.strip()
+                if port.isdigit() and 1 <= int(port) <= 65535 and port not in row_ports:
+                    row_ports.append(port)
+            if not row_ports:
+                continue
+            best_port = min(
+                enumerate(row_ports),
+                key=lambda pair: (
+                    0 if pair[1] in priority_map else 1,
+                    priority_map.get(pair[1], pair[0]),
+                    pair[0],
+                )
+            )[1]
+            node = self._format_ip_port(ip, int(best_port))
+            if node not in seen:
+                seen.add(node)
+                result.append(node)
         return result
 
     def upload_selected_nodes_incremental(self, account=1):
