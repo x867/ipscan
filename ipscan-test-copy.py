@@ -810,7 +810,7 @@ class NirSoftCFScanner:
         )
 
         self.upload_menu = tk.Menu(self.context_menu, tearoff=0)
-        self.context_menu.add_cascade(label="增量上传选中节点到…", menu=self.upload_menu)
+        self.context_menu.add_cascade(label="上传到账户", menu=self.upload_menu)
 
         self.context_menu.add_separator()
 
@@ -5530,7 +5530,7 @@ class NirSoftCFScanner:
             if accounts:
                 for account_no, account_host in accounts:
                     self.upload_menu.add_command(
-                        label=f"账户{account_no}（{account_host}）",
+                        label=f"账户{account_no}",
                         command=lambda n=account_no: self.upload_selected_nodes_incremental(n)
                     )
             else:
