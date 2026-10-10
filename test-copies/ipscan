@@ -5173,11 +5173,17 @@ class NirSoftCFScanner:
             messagebox.showinfo("提示", "请先在 IP 列表中框选/多选要上传的节点。")
             return
 
+        selected_rows = len(self.tree.selection())
+        preview = "\\n".join(nodes[:12])
+        if len(nodes) > 12:
+            preview += f"\\n……另有 {len(nodes) - 12} 个节点"
         if not messagebox.askyesno(
             "确认增量上传",
-            f"准备把选中的 {len(nodes)} 个 IP:端口增量上传到账户1（rrx.ccwu.cc）。\n"
-            "Worker 会先读取该账户原始 KV、跳过重复节点并回读校验。\n"
-            "如果旧 KV 不存在或内容无法识别，会停止写入。是否继续？"
+            f"当前选中表格行：{selected_rows} 行\\n"
+            f"拆分后的 IP:端口节点：{len(nodes)} 个\\n\\n"
+            f"待上传预览：\\n{preview}\\n\\n"
+            "目标账户：账户1（rrx.ccwu.cc）\\n"
+            "Worker 会读取旧 KV、跳过重复节点并回读校验。是否继续？"
         ):
             return
 
@@ -5191,7 +5197,7 @@ class NirSoftCFScanner:
             )
             return
 
-        self.lbl_progress.config(text=f"正在核对账户1旧 KV，准备增量上传 {len(nodes)} 个节点...")
+        self.lbl_progress.config(text=f"选中 {selected_rows} 行 / {len(nodes)} 个 IP:端口；正在连接账户1 Worker...")
         threading.Thread(
             target=self._upload_selected_nodes_incremental_worker,
             args=(nodes, password),
@@ -5226,7 +5232,10 @@ class NirSoftCFScanner:
             except Exception as exc:
                 raise RuntimeError("Worker 返回的不是有效 JSON，未能确认上传结果。") from exc
             if status != 200 or not result.get("success") or not result.get("verified"):
-                raise RuntimeError(str(result.get("error") or f"上传失败（HTTP {status}），未能确认写入结果。"))
+                detail = str(result.get("error") or f"上传失败（HTTP {status}），未能确认写入结果。")
+                if status == 522:
+                    detail += "\\n\\nHTTP 522 通常表示 Cloudflare 到目标服务的连接超时，或目标 Worker/域名当前不可达。此时不能判断 KV 是否被改动；请先检查账户1 Worker 是否已部署最新测试副本、rrx.ccwu.cc 是否可正常打开，再检查 KV。不要连续重复上传。"
+                raise RuntimeError(detail)
             summary = (
                 f"账户1增量上传完成并通过回读校验。\n\n"
                 f"上传前已有：{result.get('old_count', '?')} 条\n"
