@@ -1957,14 +1957,14 @@ class NirSoftCFScanner:
             self._set_sni_uuid_placeholder()
 
     def _config_read_current(self):
-        """读取六个 SNI/域名；公共 UUID 只读取一次并应用到六个子账户。"""
-        # 扫描协议固定为 WS。
+        """解析全部 SNI 与公共 UUID 后再统一赋值，避免 UUID 位于末行时前六项丢失。"""
         self.transport_protocol = "ws"
         raw = "" if getattr(self, "_sni_uuid_placeholder_active", False) else self.config_sni_uuid_entry.get("1.0", "end-1c")
-        configs = []
-        shared_uuid = ""
         sni_lines = []
+        shared_uuid = ""
 
+        # 先完整扫描所有行，先找出 UUID；不能边读边创建账户配置，
+        # 因为 UUID 通常放在最后一行，边读边建会导致账户1~6拿到空 UUID。
         for line in raw.splitlines():
             value = line.strip()
             if not value:
@@ -1973,15 +1973,14 @@ class NirSoftCFScanner:
                 shared_uuid = value
                 continue
             if value.startswith("公共UUID"):
-                if "/" in value:
-                    shared_uuid = value.split("/", 1)[1].strip()
-                elif ":" in value:
-                    shared_uuid = value.split(":", 1)[1].strip()
+                candidate = re.split(r"[/：:]", value, maxsplit=1)[-1].strip()
+                if candidate:
+                    shared_uuid = candidate
                 continue
             sni_lines.append(value)
 
+        configs = []
         for index, value in enumerate(sni_lines[:6], 1):
-            # 兼容旧配置格式：如果用户手工保留了“账户N | ... / UUID”，仍能读取。
             if "|" in value:
                 _, value = value.split("|", 1)
             if "/" in value:
@@ -1990,7 +1989,9 @@ class NirSoftCFScanner:
                 if not shared_uuid:
                     shared_uuid = inline_uuid.strip()
 
-            snis = list(dict.fromkeys([x.strip() for x in re.split(r"[,，;；]+", value) if x.strip()]))
+            snis = list(dict.fromkeys(
+                x.strip() for x in re.split(r"[,，;；]+", value) if x.strip()
+            ))
             configs.append({
                 "account": index,
                 "uuid": shared_uuid,
@@ -2006,9 +2007,12 @@ class NirSoftCFScanner:
                 "sni": ""
             })
 
+        # 最终再统一设置，确保所有账户都得到同一个公共 UUID。
+        for item in configs:
+            item["uuid"] = shared_uuid
         self.node_configs = configs[:6]
         self._account_sni_pos = [0] * len(self.node_configs)
-        self.config_index = min(self.config_index, len(self.node_configs) - 1)
+        self.config_index = max(0, min(getattr(self, "config_index", 0), len(self.node_configs) - 1))
 
     def _config_show_current(self):
         if not self.node_configs:
