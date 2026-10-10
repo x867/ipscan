@@ -107,9 +107,61 @@ export default {
 				} else if (访问路径 === 'admin' || 访问路径.startsWith('admin/')) {//验证cookie后响应管理页面
 					const cookies = request.headers.get('Cookie') || '';
 					const authCookie = cookies.split(';').find(c => c.trim().startsWith('auth='))?.split('=')[1];
-					// 没有cookie或cookie错误，跳转到/login页面
-					if (!authCookie || authCookie !== await MD5MD5(UA + 加密秘钥 + 管理员密码)) return new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
-					if (访问路径 === 'admin/log.json') {// 读取日志内容
+					// 支持已登录 Cookie 或由本地管理程序提供的 X-Admin-Password；其余请求仍要求登录。
+					const headerPassword = request.headers.get('X-Admin-Password') || '';
+					const cookieOK = !!authCookie && authCookie === await MD5MD5(UA + 加密秘钥 + 管理员密码);
+					const headerOK = headerPassword === (typeof 管理员密码 === 'string' ? 管理员密码.replace(/[\\r\\n]/g, '') : 管理员密码);
+					if (!cookieOK && !headerOK) {
+						if (访问路径.startsWith('admin/') && request.headers.get('Accept')?.includes('application/json')) {
+							return new Response(JSON.stringify({ success: false, error: '管理员密码验证失败' }), { status: 401, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						}
+						return new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
+					}
+					if (访问路径 === 'admin/incremental-add.txt') {// 安全增量保存自定义优选IP；只操作当前账户自己的 KV
+						if (request.method !== 'POST') return new Response(JSON.stringify({ success: false, error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						let wrote = false;
+						try {
+							const incomingText = await request.text();
+							const incoming = incomingText.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+							if (!incoming.length) throw new Error('没有收到可上传的节点');
+						// ADD.txt 允许在节点后使用 #备注；校验和去重只看 # 前面的 IP:端口。
+						const nodeAddress = value => String(value || '').trim().split('#', 1)[0].trim();
+						const validNode = value => {
+							const line = nodeAddress(value);
+							const m6 = line.match(/^\[([0-9a-fA-F:.]+)\]:(\d{1,5})$/);
+							const m4 = line.match(/^([0-9.]+):(\d{1,5})$/);
+							const m = m6 || m4;
+							if (!m) return false;
+							const port = Number(m[m.length - 1]);
+						return port >= 1 && port <= 65535;
+						};
+						if (incoming.some(x => !validNode(x))) throw new Error('节点格式异常；未写入任何数据');
+						// 允许空测试账户首次初始化：KV 键不存在（null）或值为空时按空列表处理。
+						// KV.get 本身若发生异常会进入 catch 并停止；已有非空内容仍必须通过格式检查。
+						const oldValue = await env.KV.get('ADD.txt');
+						const oldLines = (oldValue == null ? '' : String(oldValue)).split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+						const badIndex = oldLines.findIndex(x => !validNode(x));
+						if (badIndex !== -1) {
+							const badValue = oldLines[badIndex];
+							const sample = badValue.length > 80 ? badValue.slice(0, 77) + '...' : badValue;
+							throw new Error('旧 KV 第 ' + (badIndex + 1) + ' 行格式不符：' + JSON.stringify(sample) + '。未写入任何数据；请检查部署版本及该行实际内容');
+						}
+						const merged = oldLines.slice();
+						const known = new Set(oldLines.map(nodeAddress));
+						let added = 0, duplicates = 0;
+						for (const node of incoming) {
+							const key = nodeAddress(node);
+							if (known.has(key)) { duplicates++; continue; }
+							known.add(key); merged.push(node); added++;
+						}
+						if (added > 0) { await env.KV.put('ADD.txt', merged.join('\n')); wrote = true; }
+						const verifyValue = await env.KV.get('ADD.txt');
+						if (verifyValue !== merged.join('\n')) throw new Error('写入后回读校验失败；请立即检查目标 KV');
+						return new Response(JSON.stringify({ success: true, old_count: oldLines.length, incoming_count: incoming.length, added, duplicates, final_count: merged.length, verified: true }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						} catch (error) {
+							return new Response(JSON.stringify({ success: false, error: error?.message || String(error), written: wrote ? 'possibly' : false }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+						}
+					else if (访问路径 === 'admin/log.json') {// 读取日志内容
 						const 读取日志内容 = await env.KV.get('log.json') || '[]';
 						return new Response(读取日志内容, { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 					} else if (区分大小写访问路径 === 'admin/getCloudflareUsage') {// 查询请求量
